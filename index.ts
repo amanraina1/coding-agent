@@ -1,5 +1,6 @@
 import type { FunctionCallOutputItem, InputsUnion, OutputFunctionCallItem } from "@openrouter/agent";
 import { OpenRouter } from "@openrouter/sdk";
+import type { ResponsesRequestToolFunction } from "@openrouter/sdk/models";
 import axios from "axios";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -8,7 +9,7 @@ const client = new OpenRouter({
   apiKey: process.env.API_KEY,
 });
 
-const tools = [
+const tools: ResponsesRequestToolFunction[] = [
   {
     type: 'function' as const,
     name: 'get_weather',
@@ -57,7 +58,6 @@ const fetchWeather = async (query: string) => {
 };
 
 const execAsync = promisify(exec);
-
 async function execute_bash(command: string) {
   try {
     const { stdout, stderr } = await execAsync(command, {
@@ -74,14 +74,14 @@ async function execute_bash(command: string) {
   }
 }
 
-const input: InputsUnion = [{ content: "What is the weather in gurgaon and give me the summary of this repo, read the file through bash and give me the summary of the code written in this?", role: "user" }];
+const input: InputsUnion = [{ content: "Can you share the page content of the website form.araina.in is live or not ?", role: "user" }];
 
 async function callLLM(conversationHistory: InputsUnion) {
   const result = await client.responses.send({
     responsesRequest: {
       stream: false,
       tools,
-      model: 'openai/gpt-5.2',
+      model: 'gpt-oss-20b',
       input: conversationHistory
     },
   });
@@ -135,7 +135,7 @@ async function main() {
       (item): item is OutputFunctionCallItem => item.type === 'function_call',
     );
 
-    if (toolCalls.length === 0) {
+    if(toolCalls.length === 0) {
       const message = [...response.output].reverse().find((item) => item.type === 'message');
       finalText = message?.content.find((part) => part.type === 'output_text')?.text ?? '';
       break;

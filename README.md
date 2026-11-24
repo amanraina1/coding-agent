@@ -19,3 +19,8 @@ bun check
 ```
 
 This project was created using `bun init` in bun v1.4.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+
+// Add 
+// 1. Streaming
+// 2. Sub agents
+// 3. Web Search
