@@ -74,12 +74,22 @@ async function execute_bash(command: string) {
   }
 }
 
-const input: InputsUnion = [{ content: "Can you share the page content of the website form.araina.in is live or not ?", role: "user" }];
+// and share the page content of the website form.araina.in is live or not ?
+const input: InputsUnion = [
+    { 
+        content: "Can you tell me the weather of today in Gurgaon and also list all the files and folders in this directory ?", 
+        role: "user" 
+    },
+    {
+        content: "You are a helpful assistent, you have access to bunch of tools, use them to get data whatever you need. Remember the tool names perfectly. don't use any other name, other than what is specified here",
+        role: "system"
+    }
+];
 
 async function callLLM(conversationHistory: InputsUnion) {
   const result = await client.responses.send({
     responsesRequest: {
-      stream: false,
+      stream: true,
       tools,
       model: 'gpt-oss-20b',
       input: conversationHistory
@@ -152,5 +162,116 @@ async function main() {
 
   console.log(finalText);
 }
+// main();
 
-main();
+
+
+
+async function callLLM2(conversationHistory: InputsUnion) {
+  const result = await client.responses.send({
+    responsesRequest: {
+      stream: true,
+      tools,
+      model: 'openai/gpt-oss-20b',
+      input: conversationHistory,
+    },
+  });
+
+  if (!('output' in result)) {
+    let completedResponse: any = null;
+    const fallbackOutputItems: any[] = [];
+
+    for await (const event of result) {
+
+        switch (event.type) {
+
+            case "response.failed":
+                throw new Error(event.response?.error?.message ?? 'Response failed');
+                
+            case "response.incomplete":
+                throw new Error(`Response incomplete: ${event.response ?? 'unknown reason'}`);
+
+            case "response.output_text.delta":
+                process.stdout.write(event.delta ?? '');
+                break;
+
+            case "response.output_item.done": {
+                if (event.item) {
+                    fallbackOutputItems.push(event.item);
+                    if (event.item.type === 'function_call') {
+                        console.log(`\n[Calling tool: ${event.item.name}(${event.item.arguments})]`);
+                    }
+                }
+                break;
+            }
+
+            case "response.completed": {
+                completedResponse = event.response;
+                break;
+            }
+        }
+    }
+
+    if (!completedResponse) {
+      throw new Error('Stream ended before receiving response.completed event');
+    }
+
+    const outputItems = completedResponse?.output ?? fallbackOutputItems;
+    if (outputItems.length === 0) {
+        throw new Error('Stream ended without producing any output items');
+    }
+
+    conversationHistory.push(...outputItems);
+
+    return {output: outputItems}
+  }
+}
+
+async function main2() {
+
+    while(true) {
+        const response = await callLLM2(input);
+
+        const toolCalls = response?.output.filter(item => item.type === "function_call");
+
+        if(toolCalls.length == 0) {
+            return;
+        }
+        console.log("toolCalls => ", toolCalls)
+
+        const toolOutputs = await Promise.all(toolCalls.map(async (toolCall) => {
+            const response = await getToolResponse(toolCall)
+            return response
+        }));
+
+        input.push(...toolOutputs);
+    }
+
+//   let finalText: string | undefined;
+
+//   while (true) {
+//     const response = await callLLM(input);
+
+//     const toolCalls = response.output.filter(
+//       (item): item is OutputFunctionCallItem => item.type === 'function_call',
+//     );
+
+//     if(toolCalls.length === 0) {
+//       const message = [...response.output].reverse().find((item) => item.type === 'message');
+//       finalText = message?.content.find((part) => part.type === 'output_text')?.text ?? '';
+//       break;
+//     }
+
+//     for (const toolCall of toolCalls) {
+//       input.push(await getToolResponse(toolCall));
+//     }
+//   }
+
+//   if (finalText === undefined) {
+//     console.warn("Warning: Maximum iterations reached");
+//   }
+
+//   console.log(finalText);
+}
+
+main2()
