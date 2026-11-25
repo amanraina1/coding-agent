@@ -77,7 +77,8 @@ async function execute_bash(command: string) {
 // and share the page content of the website form.araina.in is live or not ?
 const input: InputsUnion = [
     { 
-        content: "Can you tell me the weather of today in Gurgaon and also list all the files and folders in this directory ?", 
+        // content: "Can you tell me the weather of today in Gurgaon and also list all the files and folders in this directory, also make a file as demo.js and write a simple http server in it using node js?", 
+        content: "Currently if you check in index.ts file i only have 2 tool calls integrated, and i want to add another tool call which is to spawn for multiple agents for heaview task, can you tell me how can i. implement that",
         role: "user" 
     },
     {
@@ -89,16 +90,12 @@ const input: InputsUnion = [
 async function callLLM(conversationHistory: InputsUnion) {
   const result = await client.responses.send({
     responsesRequest: {
-      stream: true,
+      stream: false,
       tools,
       model: 'gpt-oss-20b',
       input: conversationHistory
     },
   });
-
-  if (!('output' in result)) {
-    throw new Error('Expected a non-streaming response');
-  }
 
   if (result.status !== 'completed') {
     throw new Error(result.error?.message ?? `Response ended as ${result.status}`);
@@ -162,116 +159,4 @@ async function main() {
 
   console.log(finalText);
 }
-// main();
-
-
-
-
-async function callLLM2(conversationHistory: InputsUnion) {
-  const result = await client.responses.send({
-    responsesRequest: {
-      stream: true,
-      tools,
-      model: 'openai/gpt-oss-20b',
-      input: conversationHistory,
-    },
-  });
-
-  if (!('output' in result)) {
-    let completedResponse: any = null;
-    const fallbackOutputItems: any[] = [];
-
-    for await (const event of result) {
-
-        switch (event.type) {
-
-            case "response.failed":
-                throw new Error(event.response?.error?.message ?? 'Response failed');
-                
-            case "response.incomplete":
-                throw new Error(`Response incomplete: ${event.response ?? 'unknown reason'}`);
-
-            case "response.output_text.delta":
-                process.stdout.write(event.delta ?? '');
-                break;
-
-            case "response.output_item.done": {
-                if (event.item) {
-                    fallbackOutputItems.push(event.item);
-                    if (event.item.type === 'function_call') {
-                        console.log(`\n[Calling tool: ${event.item.name}(${event.item.arguments})]`);
-                    }
-                }
-                break;
-            }
-
-            case "response.completed": {
-                completedResponse = event.response;
-                break;
-            }
-        }
-    }
-
-    if (!completedResponse) {
-      throw new Error('Stream ended before receiving response.completed event');
-    }
-
-    const outputItems = completedResponse?.output ?? fallbackOutputItems;
-    if (outputItems.length === 0) {
-        throw new Error('Stream ended without producing any output items');
-    }
-
-    conversationHistory.push(...outputItems);
-
-    return {output: outputItems}
-  }
-}
-
-async function main2() {
-
-    while(true) {
-        const response = await callLLM2(input);
-
-        const toolCalls = response?.output.filter(item => item.type === "function_call");
-
-        if(toolCalls.length == 0) {
-            return;
-        }
-        console.log("toolCalls => ", toolCalls)
-
-        const toolOutputs = await Promise.all(toolCalls.map(async (toolCall) => {
-            const response = await getToolResponse(toolCall)
-            return response
-        }));
-
-        input.push(...toolOutputs);
-    }
-
-//   let finalText: string | undefined;
-
-//   while (true) {
-//     const response = await callLLM(input);
-
-//     const toolCalls = response.output.filter(
-//       (item): item is OutputFunctionCallItem => item.type === 'function_call',
-//     );
-
-//     if(toolCalls.length === 0) {
-//       const message = [...response.output].reverse().find((item) => item.type === 'message');
-//       finalText = message?.content.find((part) => part.type === 'output_text')?.text ?? '';
-//       break;
-//     }
-
-//     for (const toolCall of toolCalls) {
-//       input.push(await getToolResponse(toolCall));
-//     }
-//   }
-
-//   if (finalText === undefined) {
-//     console.warn("Warning: Maximum iterations reached");
-//   }
-
-//   console.log(finalText);
-}
-
-main2()
+main();
